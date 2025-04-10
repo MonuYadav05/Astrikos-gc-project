@@ -1,84 +1,123 @@
-import { useEffect, useRef } from "react";
-import { Viewer, Entity } from "resium";
-import { Cartesian3, Ion } from "cesium";
+import { useEffect, useRef, useState } from "react";
+import { Viewer, Entity, ModelGraphics } from "resium";
+import { Cartesian3, createOsmBuildingsAsync, Ion, Math as CesiumMath, createWorldTerrainAsync, SampledPositionProperty, JulianDate, ClockRange, ClockStep, VelocityOrientationProperty, PathGraphics, TimeIntervalCollection, TimeInterval, Clock } from 'cesium';
 import "cesium/Build/Cesium/Widgets/widgets.css";
+import { treesLocation } from "../data/trees";
+import { ambulancePath } from "../data/ambulanceData";
 
 // Initialize Cesium access token
-Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5ZmVlZmU2MS00ODU3LTQ0YTYtYTVmMS0yYzViMzYxYTBlMmYiLCJpZCI6MjkyMTA0LCJpYXQiOjE3NDQxMjk3ODl9.eSbwfGiwUDWfl8hrmEVIAQt_GPu-qKflFfn93MWVEKY";
-window.CESIUM_BASE_URL = "/cesium";
+Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI1NDYzODI3Mi00OTlmLTRlNjctOTczOC0wYzA3MmI1ODgxMGIiLCJpZCI6MjkyMTA0LCJpYXQiOjE3NDQxODQwOTB9.NwrWo2AlyRVVNFb5H_OXnMkRUR5bt_HxxQJjpOQVUC4";
+window.CESIUM_BASE_URL = "/";
+
 export default function MapViewer() {
-    const viewerRef = useRef();
+    const viewerRef = useRef(null);
+    const [terrainProvider, setTerrainProvider] = useState(null);
+    const [modelEntity, setModelEntity] = useState(null);
+    const [clockProps, setClockProps] = useState(null);
 
     useEffect(() => {
-        window.CESIUM_BASE_URL = '/';
+        createWorldTerrainAsync().then(setTerrainProvider);
     }, []);
 
 
     useEffect(() => {
-        if (viewerRef.current && viewerRef.current.cesiumElement) {
-            const viewer = viewerRef.current.cesiumElement;
+        const viewer = viewerRef.current?.cesiumElement;
+        console.log(viewerRef.current);
+        console.log(terrainProvider)
+        if (!viewer) return;
 
-            viewer.selectedEntityChanged.addEventListener((entity) => {
-                if (entity) {
-                    console.log("Clicked entity:", entity.name);
-                }
-            });
-            viewer.selectedEntityChanged.addEventListener((entity) => {
-                if (entity) {
-                    viewerRef.flyTo(entity, {
-                        duration: 2, // seconds
-                    });
-                }
-            });
+        // Fly to San Francisco
+        viewer.camera.flyTo({
+            destination: Cartesian3.fromDegrees(77.894569, 29.864611, 400),
+            orientation: {
+                heading: CesiumMath.toRadians(20.0),
+                pitch: CesiumMath.toRadians(-20.0),
+            },
+        });
+
+        // Add 3D buildings
+        createOsmBuildingsAsync().then((tileset) => {
+            viewer.scene.primitives.add(tileset);
+        });
+    }, [terrainProvider]);
+
+    useEffect(() => {
+        const timeStepInSeconds = 30;
+        const totalSeconds = timeStepInSeconds * (ambulancePath.length - 1);
+        const start = JulianDate.now();
+        const stop = JulianDate.addSeconds(start, totalSeconds, new JulianDate());
+
+        // Set clock configuration
+        const clock = new Clock();
+        clock.startTime = start.clone();
+        clock.stopTime = stop.clone();
+        clock.currentTime = start.clone();
+        clock.clockRange = ClockRange.CLAMPED;
+        clock.clockStep = ClockStep.SYSTEM_CLOCK_MULTIPLIER;
+        clock.multiplier = 50;
+        clock.shouldAnimate = true;
+        setClockProps(clock);
+
+        // Set up position data
+        const positionProperty = new SampledPositionProperty();
+        for (let i = 0; i < ambulancePath.length; i++) {
+            const latitude = ambulancePath[i].coordinates[1];
+            const longitude = ambulancePath[i].coordinates[0];
+            const height = 220;
+            const time = JulianDate.addSeconds(start, i * timeStepInSeconds, new JulianDate());
+            const position = Cartesian3.fromDegrees(longitude, latitude, height);
+            positionProperty.addSample(time, position);
         }
 
+        // Add model with animation path
+        const airplaneEntity = {
+            availability: new TimeIntervalCollection([
+                new TimeInterval({ start, stop }),
+            ]),
+            position: positionProperty,
+            model: {
+                uri: "/ambulance_car.glb", // ✅ LOCAL PATH to your .glb file in public/models
+                scale: 1.0,
+                minimumPixelSize: 64,
+            },
+            orientation: new VelocityOrientationProperty(positionProperty),
+            path: new PathGraphics({ width: 3 }),
+        };
+
+        setModelEntity(airplaneEntity);
     }, []);
-
-    const units = [
-        {
-            id: 1,
-            type: "fire",
-            position: Cartesian3.fromDegrees(77.894569, 29.864611, 0),
-            description: "Fire Truck Unit 1",
-            modelUrl: '/ambulance_car.glb'
-        },
-
-        {
-            id: 2,
-            type: "police",
-            position: Cartesian3.fromDegrees(77.894569, 29.864611, 0),
-            description: "Police Unit 2",
-            modelUrl: '/ambulance_car.glb'
-        }
-    ];
 
     return (
-        <div className="w-full h-full relative">
-            <Viewer full
-            >
-                {units.map((unit) => (
-                    <Entity
-                        key={unit.id}
-                        position={unit.position}
-                        name={unit.type}
-                        model={{
-                            uri: unit.modelUrl,
-                            minimumPixelSize: 64, // scales model when zoomed out
-                            maximumScale: 200, // to avoid it becoming too huge
-                        }}
-                        description={unit.description}
-                        label={{
-                            text: unit.name,
-                            font: "14pt sans-serif",
-                            fillColor: 'white',
-                            style: 'FILL',
-                            outlineWidth: 2,
-                            verticalOrigin: "BOTTOM",
-                            pixelOffset: [0, -10],
-                        }}
-                    />
-                ))}
-            </Viewer>
+        <div className="w-screen h-screen relative">
+            {terrainProvider && (
+                <Viewer
+                    full
+                    ref={viewerRef}
+                    terrainProvider={terrainProvider}
+                    timeline
+                    clock={clockProps}
+                >
+                    {treesLocation.map((tree, index) => (
+                        <Entity
+                            key={index}
+                            position={Cartesian3.fromDegrees(tree.coordinates[0], tree.coordinates[1], 220)}>
+                            <ModelGraphics
+                                uri="/tree.glb"
+                                minimumPixelSize={340}
+                                maximumPixelSize={180}
+                                maximumScale={10}
+                            />
+                        </Entity>
+                    ))}
+                    {modelEntity && <Entity {...modelEntity} />}
+
+
+                </Viewer>)}
         </div>
     );
 }
+
+
+
+
+

@@ -41,7 +41,7 @@ function App() {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-7xl   sm:px-6 lg:px-8">
         <div className="h-[calc(100vh-8rem)]">
           {activeTab === 'map' && <MapViewer />}
           {activeTab === '3d' && (
