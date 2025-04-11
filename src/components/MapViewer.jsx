@@ -42,7 +42,7 @@ export default function MapViewer() {
     }, [terrainProvider]);
 
     useEffect(() => {
-        const timeStepInSeconds = 30;
+        const timeStepInSeconds = 10;
         const totalSeconds = timeStepInSeconds * (ambulancePath.length - 1);
         const start = JulianDate.now();
         const stop = JulianDate.addSeconds(start, totalSeconds, new JulianDate());
