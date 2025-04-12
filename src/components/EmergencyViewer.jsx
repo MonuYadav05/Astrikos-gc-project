@@ -31,14 +31,16 @@ function EmergencyViewer() {
         // Simulate real-time emergency data
         const mockEmergencies = [
             { id: 1, type: 'Fire', location: [51.505, -0.09], severity: 'High', timestamp: new Date() },
-            { id: 2, type: 'Medical', location: [51.51, -0.1], severity: 'Medium', timestamp: new Date() },
+            { id: 2, type: 'Medical', location: [29.864097266133999, 77.896710156385822], severity: 'Medium', timestamp: new Date() },
         ]
         setEmergencies(mockEmergencies)
 
         // Simulate available resources
         const mockResources = [
             { id: 1, type: 'Fire Truck', location: [51.503, -0.087], status: 'Available' },
-            { id: 2, type: 'Ambulance', location: [51.508, -0.095], status: 'En Route' },
+            {
+                id: 2, type: 'Ambulance', location: [29.861865847761354, 77.892967097639158], status: 'En Route'
+            },
         ]
         setResources(mockResources)
 
@@ -56,29 +58,18 @@ function EmergencyViewer() {
 
     return (
         <div className="grid grid-cols-3 gap-4 h-[calc(100vh-100px)]">
+
             <div className="col-span-2 bg-white rounded-lg shadow-lg overflow-hidden">
-                <div className="h-full">
-                    <div className="flex gap-2 p-2 bg-gray-100">
-                        <button
-                            className={`px-4 py-2 rounded ${selectedView === '3d' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-                            onClick={() => setSelectedView('3d')}
-                        >
-                            3D View
-                        </button>
-                        <button
-                            className={`px-4 py-2 rounded ${selectedView === 'map' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-                            onClick={() => setSelectedView('map')}
-                        >
-                            Map View
-                        </button>
-                    </div>
+
+                <div className="h-full overflow-scroll">
+
 
                     {selectedView === '3d' ? (
                         <MapViewer />
                     ) : (
                         <MapContainer
-                            center={[51.505, -0.09]}
-                            zoom={13}
+                            center={[29.864097266133999, 77.896710156385822]}
+                            zoom={40}
                             className="h-full"
                         >
                             <TileLayer
@@ -99,7 +90,7 @@ function EmergencyViewer() {
                                     </Marker>
                                     <Circle
                                         center={emergency.location}
-                                        radius={500}
+                                        radius={50}
                                         pathOptions={{ color: 'red', fillColor: 'red', fillOpacity: 0.2 }}
                                     />
                                 </React.Fragment>
@@ -122,6 +113,20 @@ function EmergencyViewer() {
             </div>
 
             <div className="bg-white rounded-lg shadow-lg p-4">
+                <div className="flex gap-2 p-2 bg-gray-100">
+                    <button
+                        className={`px-4 py-2 rounded ${selectedView === '3d' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                        onClick={() => setSelectedView('3d')}
+                    >
+                        3D View
+                    </button>
+                    <button
+                        className={`px-4 py-2 rounded ${selectedView === 'map' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+                        onClick={() => setSelectedView('map')}
+                    >
+                        Map View
+                    </button>
+                </div>
                 <h2 className="text-xl font-bold mb-4">Emergency Response Metrics</h2>
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">

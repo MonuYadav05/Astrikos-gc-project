@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Viewer, Entity, ModelGraphics } from "resium";
-import { Cartesian3, createOsmBuildingsAsync, Ion, Math as CesiumMath, createWorldTerrainAsync, SampledPositionProperty, JulianDate, ClockRange, ClockStep, VelocityOrientationProperty, PathGraphics, TimeIntervalCollection, TimeInterval, Clock } from 'cesium';
+import { Cartesian3, createOsmBuildingsAsync, Ion, Math as CesiumMath, createWorldTerrainAsync, SampledPositionProperty, JulianDate, ClockRange, ClockStep, VelocityOrientationProperty, PathGraphics, TimeIntervalCollection, TimeInterval, Clock, Color, Ellipsoid } from 'cesium';
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { treesLocation } from "../data/trees";
 import { ambulancePath } from "../data/ambulanceData";
@@ -14,6 +14,10 @@ export default function MapViewer() {
     const [terrainProvider, setTerrainProvider] = useState(null);
     const [modelEntity, setModelEntity] = useState(null);
     const [clockProps, setClockProps] = useState(null);
+    const emergencyCoords = [77.896710156385822, 29.864097266133999];
+    const [distanceLeft, setDistanceLeft] = useState(0);
+    const [speed, setSpeed] = useState(0);
+    const [eta, setEta] = useState(0);
 
     useEffect(() => {
         createWorldTerrainAsync().then(setTerrainProvider);
@@ -22,11 +26,12 @@ export default function MapViewer() {
 
     useEffect(() => {
         const viewer = viewerRef.current?.cesiumElement;
-        console.log(viewerRef.current);
-        console.log(terrainProvider)
-        if (!viewer) return;
 
-        // Fly to San Francisco
+        if (!viewer || !modelEntity) return;
+
+        const trackedEntity = viewer.entities.add(modelEntity);
+        viewer.trackedEntity = trackedEntity;
+
         viewer.camera.flyTo({
             destination: Cartesian3.fromDegrees(77.894569, 29.864611, 400),
             orientation: {
@@ -35,57 +40,113 @@ export default function MapViewer() {
             },
         });
 
-        // Add 3D buildings
         createOsmBuildingsAsync().then((tileset) => {
             viewer.scene.primitives.add(tileset);
         });
-    }, [terrainProvider]);
+    }, [terrainProvider, modelEntity]);
+
+
+    function getDistance(lat1, lon1, lat2, lon2) {
+        const cart1 = Cartesian3.fromDegrees(lon1, lat1);
+        const cart2 = Cartesian3.fromDegrees(lon2, lat2);
+        return Cartesian3.distance(cart1, cart2); // in meters
+    }
+
+    function getTotalDistance(path) {
+        let total = 0;
+        for (let i = 1; i < path.length; i++) {
+            const [lon1, lat1] = path[i - 1].coordinates;
+            const [lon2, lat2] = path[i].coordinates;
+            total += getDistance(lat1, lon1, lat2, lon2);
+        }
+        return total;
+    }
+
 
     useEffect(() => {
         const timeStepInSeconds = 10;
-        const totalSeconds = timeStepInSeconds * (ambulancePath.length - 1);
         const start = JulianDate.now();
+        const totalSeconds = timeStepInSeconds * (ambulancePath.length - 1);
         const stop = JulianDate.addSeconds(start, totalSeconds, new JulianDate());
 
-        // Set clock configuration
+        const totalDistance = getTotalDistance(ambulancePath);
+
+        const positionProperty = new SampledPositionProperty();
+        for (let i = 0; i < ambulancePath.length; i++) {
+            const [lon, lat] = ambulancePath[i].coordinates;
+            const position = Cartesian3.fromDegrees(lon, lat, 220);
+            const time = JulianDate.addSeconds(start, i * timeStepInSeconds, new JulianDate());
+            positionProperty.addSample(time, position);
+        }
+
         const clock = new Clock();
         clock.startTime = start.clone();
         clock.stopTime = stop.clone();
         clock.currentTime = start.clone();
         clock.clockRange = ClockRange.CLAMPED;
         clock.clockStep = ClockStep.SYSTEM_CLOCK_MULTIPLIER;
-        clock.multiplier = 50;
+        clock.multiplier = 50; // Speed of simulation
         clock.shouldAnimate = true;
+
         setClockProps(clock);
 
-        // Set up position data
-        const positionProperty = new SampledPositionProperty();
-        for (let i = 0; i < ambulancePath.length; i++) {
-            const latitude = ambulancePath[i].coordinates[1];
-            const longitude = ambulancePath[i].coordinates[0];
-            const height = 220;
-            const time = JulianDate.addSeconds(start, i * timeStepInSeconds, new JulianDate());
-            const position = Cartesian3.fromDegrees(longitude, latitude, height);
-            positionProperty.addSample(time, position);
-        }
-
-        // Add model with animation path
-        const airplaneEntity = {
-            availability: new TimeIntervalCollection([
-                new TimeInterval({ start, stop }),
-            ]),
+        const ambulanceEntity = {
+            availability: new TimeIntervalCollection([new TimeInterval({ start, stop })]),
             position: positionProperty,
-            model: {
-                uri: "/ambulance_car.glb", // ✅ LOCAL PATH to your .glb file in public/models
-                scale: 1.0,
-                minimumPixelSize: 64,
-            },
             orientation: new VelocityOrientationProperty(positionProperty),
-            path: new PathGraphics({ width: 3 }),
+            path: new PathGraphics({ width: 3, material: Color.RED }),
+            model: {
+                uri: "/ambulance_car.glb",
+                scale: 1.0,
+                minimumPixelSize: 140,
+                maximumPixelSize: 180,
+                maximumScale: 10
+            },
         };
 
-        setModelEntity(airplaneEntity);
+        setModelEntity(ambulanceEntity);
+
+        const interval = setInterval(() => {
+            const viewer = viewerRef.current?.cesiumElement;
+            if (!viewer) return;
+            const clock = viewer.clock;
+
+            const currentTime = clock.currentTime;
+            const currentPosition = positionProperty.getValue(currentTime);
+            if (!currentPosition) return;
+
+            let distanceLeft = 0;
+            for (let i = 1; i < ambulancePath.length; i++) {
+                const time = JulianDate.addSeconds(start, i * timeStepInSeconds, new JulianDate());
+                const futurePos = positionProperty.getValue(time);
+                if (futurePos && JulianDate.compare(currentTime, time) < 0) {
+                    distanceLeft += Cartesian3.distance(currentPosition, futurePos);
+                    for (let j = i + 1; j < ambulancePath.length; j++) {
+                        const [lon1, lat1] = ambulancePath[j - 1].coordinates;
+                        const [lon2, lat2] = ambulancePath[j].coordinates;
+                        distanceLeft += getDistance(lat1, lon1, lat2, lon2);
+                    }
+                    break;
+                }
+            }
+
+            const elapsedSeconds = JulianDate.secondsDifference(currentTime, start);
+            if (elapsedSeconds <= 0 || isNaN(elapsedSeconds)) return;
+
+            const numericSpeed = (totalDistance - distanceLeft) / elapsedSeconds;
+            if (!isFinite(numericSpeed) || numericSpeed <= 0) return;
+
+            const speedValue = numericSpeed.toFixed(2);
+            const etaValue = (distanceLeft / numericSpeed).toFixed(1);
+
+            setDistanceLeft(distanceLeft.toFixed(2));
+            setSpeed(speedValue);
+            setEta(etaValue);
+        }, 1000);
+
+        return () => clearInterval(interval);
     }, []);
+
 
     return (
         <div className="w-screen h-screen relative">
@@ -110,8 +171,16 @@ export default function MapViewer() {
                         </Entity>
                     ))}
                     {modelEntity && <Entity {...modelEntity} />}
-
-
+                    <Entity
+                        name="Emergency Location"
+                        position={Cartesian3.fromDegrees(emergencyCoords[0], emergencyCoords[1], 220)}
+                        point={{ pixelSize: 16, color: Color.RED }}
+                    />
+                    <div className="absolute top-4 left-4 bg-white p-4 rounded shadow-md z-10">
+                        <p>🚑 Distance Left: {distanceLeft} m</p>
+                        <p>⚡ Speed: {speed} m/s</p>
+                        <p>⏱ ETA: {eta} s</p>
+                    </div>
                 </Viewer>)}
         </div>
     );
