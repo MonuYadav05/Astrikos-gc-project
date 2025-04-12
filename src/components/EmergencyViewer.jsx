@@ -30,14 +30,14 @@ function EmergencyViewer() {
     useEffect(() => {
         // Simulate real-time emergency data
         const mockEmergencies = [
-            { id: 1, type: 'Fire', location: [51.505, -0.09], severity: 'High', timestamp: new Date() },
+            { id: 1, type: 'Fire', location: [29.867112103202281, 77.893290717873057], severity: 'High', timestamp: new Date() },
             { id: 2, type: 'Medical', location: [29.864097266133999, 77.896710156385822], severity: 'Medium', timestamp: new Date() },
         ]
         setEmergencies(mockEmergencies)
 
         // Simulate available resources
         const mockResources = [
-            { id: 1, type: 'Fire Truck', location: [51.503, -0.087], status: 'Available' },
+            { id: 1, type: 'Fire Truck', location: [29.862647418639998, 77.893512545655184], status: 'Available' },
             {
                 id: 2, type: 'Ambulance', location: [29.861865847761354, 77.892967097639158], status: 'En Route'
             },

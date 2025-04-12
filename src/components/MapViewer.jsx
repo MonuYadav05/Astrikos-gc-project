@@ -4,6 +4,7 @@ import { Cartesian3, createOsmBuildingsAsync, Ion, Math as CesiumMath, createWor
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { treesLocation } from "../data/trees";
 import { ambulancePath } from "../data/ambulanceData";
+import { fireTruckPath } from "../data/fireTruckData";
 
 // Initialize Cesium access token
 Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI1NDYzODI3Mi00OTlmLTRlNjctOTczOC0wYzA3MmI1ODgxMGIiLCJpZCI6MjkyMTA0LCJpYXQiOjE3NDQxODQwOTB9.NwrWo2AlyRVVNFb5H_OXnMkRUR5bt_HxxQJjpOQVUC4";
@@ -18,6 +19,11 @@ export default function MapViewer() {
     const [distanceLeft, setDistanceLeft] = useState(0);
     const [speed, setSpeed] = useState(0);
     const [eta, setEta] = useState(0);
+    const fireEmergencyCoords = [77.893290717873057, 29.867112103202281];
+    const [fireTruckEntity, setFireTruckEntity] = useState(null);
+    const [fireTruckDistanceLeft, setFireTruckDistanceLeft] = useState(0);
+    const [fireTruckSpeed, setFireTruckSpeed] = useState(0);
+    const [fireTruckEta, setFireTruckEta] = useState(0);
 
     useEffect(() => {
         createWorldTerrainAsync().then(setTerrainProvider);
@@ -29,8 +35,8 @@ export default function MapViewer() {
 
         if (!viewer || !modelEntity) return;
 
-        const trackedEntity = viewer.entities.add(modelEntity);
-        viewer.trackedEntity = trackedEntity;
+        // const trackedEntity = viewer.entities.add(modelEntity);
+        // viewer.trackedEntity = trackedEntity;
 
         viewer.camera.flyTo({
             destination: Cartesian3.fromDegrees(77.894569, 29.864611, 400),
@@ -65,9 +71,12 @@ export default function MapViewer() {
 
     useEffect(() => {
         const timeStepInSeconds = 10;
+        const fireTimeStepInSeconds = 1;
         const start = JulianDate.now();
         const totalSeconds = timeStepInSeconds * (ambulancePath.length - 1);
         const stop = JulianDate.addSeconds(start, totalSeconds, new JulianDate());
+        const fireTruckTotalSeconds = fireTimeStepInSeconds * (fireTruckPath.length - 1);
+        const fireTruckStop = JulianDate.addSeconds(start, fireTruckTotalSeconds, new JulianDate());
 
         const totalDistance = getTotalDistance(ambulancePath);
 
@@ -78,6 +87,28 @@ export default function MapViewer() {
             const time = JulianDate.addSeconds(start, i * timeStepInSeconds, new JulianDate());
             positionProperty.addSample(time, position);
         }
+        const firePositionProperty = new SampledPositionProperty();
+        for (let i = 0; i < fireTruckPath.length; i++) {
+            const [lon, lat] = fireTruckPath[i].coordinates;
+            const position = Cartesian3.fromDegrees(lon, lat, 220);
+            const time = JulianDate.addSeconds(start, i * fireTimeStepInSeconds, new JulianDate());
+            firePositionProperty.addSample(time, position);
+        }
+
+        const fireTruckEntity = {
+            availability: new TimeIntervalCollection([new TimeInterval({ start, stop: fireTruckStop })]),
+            position: firePositionProperty,
+            orientation: new VelocityOrientationProperty(firePositionProperty),
+            path: new PathGraphics({ width: 3, material: Color.ORANGE }),
+            model: {
+                uri: "/FireTruck.glb",
+                scale: 1.0,
+                minimumPixelSize: 240,
+                maximumPixelSize: 280,
+                maximumScale: 10
+            },
+        };
+        setFireTruckEntity(fireTruckEntity);
 
         const clock = new Clock();
         clock.startTime = start.clone();
@@ -144,7 +175,47 @@ export default function MapViewer() {
             setEta(etaValue);
         }, 1000);
 
-        return () => clearInterval(interval);
+        const fireTruckTotalDistance = getTotalDistance(fireTruckPath);
+
+        const fireInterval = setInterval(() => {
+            const viewer = viewerRef.current?.cesiumElement;
+            if (!viewer) return;
+            const clock = viewer.clock;
+
+            const currentTime = clock.currentTime;
+            const currentPosition = firePositionProperty.getValue(currentTime);
+            if (!currentPosition) return;
+
+            let distanceLeft = 0;
+            for (let i = 1; i < fireTruckPath.length; i++) {
+                const time = JulianDate.addSeconds(start, i * fireTimeStepInSeconds, new JulianDate());
+                const futurePos = firePositionProperty.getValue(time);
+                if (futurePos && JulianDate.compare(currentTime, time) < 0) {
+                    distanceLeft += Cartesian3.distance(currentPosition, futurePos);
+                    for (let j = i + 1; j < fireTruckPath.length; j++) {
+                        const [lon1, lat1] = fireTruckPath[j - 1].coordinates;
+                        const [lon2, lat2] = fireTruckPath[j].coordinates;
+                        distanceLeft += getDistance(lat1, lon1, lat2, lon2);
+                    }
+                    break;
+                }
+            }
+
+            const elapsedSeconds = JulianDate.secondsDifference(currentTime, start);
+            if (elapsedSeconds <= 0 || isNaN(elapsedSeconds)) return;
+
+            const numericSpeed = (fireTruckTotalDistance - distanceLeft) / elapsedSeconds;
+            if (!isFinite(numericSpeed) || numericSpeed <= 0) return;
+
+            setFireTruckDistanceLeft(distanceLeft.toFixed(2));
+            setFireTruckSpeed(numericSpeed.toFixed(2));
+            setFireTruckEta((distanceLeft / numericSpeed).toFixed(1));
+        }, 1000);
+
+        return () => {
+            clearInterval(interval);
+            clearInterval(fireInterval);
+        }
     }, []);
 
 
@@ -171,15 +242,30 @@ export default function MapViewer() {
                         </Entity>
                     ))}
                     {modelEntity && <Entity {...modelEntity} />}
+                    {fireTruckEntity && <Entity {...fireTruckEntity} />}
                     <Entity
                         name="Emergency Location"
                         position={Cartesian3.fromDegrees(emergencyCoords[0], emergencyCoords[1], 220)}
                         point={{ pixelSize: 16, color: Color.RED }}
                     />
-                    <div className="absolute top-4 left-4 bg-white p-4 rounded shadow-md z-10">
-                        <p>🚑 Distance Left: {distanceLeft} m</p>
-                        <p>⚡ Speed: {speed} m/s</p>
-                        <p>⏱ ETA: {eta} s</p>
+                    <Entity
+                        name="Fire Emergency Location"
+                        position={Cartesian3.fromDegrees(fireEmergencyCoords[0], fireEmergencyCoords[1], 220)}
+                        point={{ pixelSize: 16, color: Color.ORANGE }}
+                    />
+                    <div className="absolute top-4 left-4 bg-white p-4 rounded shadow-md z-10 space-y-2">
+                        <div>
+                            <h2 className="font-bold">🚑 Ambulance</h2>
+                            <p>Distance Left: {distanceLeft} m</p>
+                            <p>Speed: {speed} m/s</p>
+                            <p>ETA: {eta} s</p>
+                        </div>
+                        <div>
+                            <h2 className="font-bold mt-2">🚒 Fire Truck</h2>
+                            <p>Distance Left: {fireTruckDistanceLeft} m</p>
+                            <p>Speed: {fireTruckSpeed} m/s</p>
+                            <p>ETA: {fireTruckEta} s</p>
+                        </div>
                     </div>
                 </Viewer>)}
         </div>
