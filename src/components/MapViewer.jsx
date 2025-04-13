@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Viewer, Entity, ModelGraphics } from "resium";
-import { Cartesian3, createOsmBuildingsAsync, Ion, Math as CesiumMath, createWorldTerrainAsync, SampledPositionProperty, JulianDate, ClockRange, ClockStep, VelocityOrientationProperty, PathGraphics, TimeIntervalCollection, TimeInterval, Clock, Color, Ellipsoid } from 'cesium';
+import { Viewer, Entity, ModelGraphics, LabelGraphics } from "resium";
+import { Cartesian3, createOsmBuildingsAsync, Ion, Math as CesiumMath, createWorldTerrainAsync, SampledPositionProperty, JulianDate, ClockRange, ClockStep, VelocityOrientationProperty, PathGraphics, TimeIntervalCollection, TimeInterval, Clock, Color, Ellipsoid, LabelStyle, VerticalOrigin, HorizontalOrigin, Cartesian2, HeadingPitchRoll, CallbackProperty, Transforms, Quaternion } from 'cesium';
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { treesLocation } from "../data/trees";
 import { ambulancePath } from "../data/ambulanceData";
@@ -33,7 +33,7 @@ export default function MapViewer() {
     useEffect(() => {
         const viewer = viewerRef.current?.cesiumElement;
 
-        if (!viewer || !modelEntity) return;
+        if (!viewer || !terrainProvider) return;
 
         // const trackedEntity = viewer.entities.add(modelEntity);
         // viewer.trackedEntity = trackedEntity;
@@ -87,6 +87,8 @@ export default function MapViewer() {
             const time = JulianDate.addSeconds(start, i * timeStepInSeconds, new JulianDate());
             positionProperty.addSample(time, position);
         }
+
+
         const firePositionProperty = new SampledPositionProperty();
         for (let i = 0; i < fireTruckPath.length; i++) {
             const [lon, lat] = fireTruckPath[i].coordinates;
@@ -94,18 +96,26 @@ export default function MapViewer() {
             const time = JulianDate.addSeconds(start, i * fireTimeStepInSeconds, new JulianDate());
             firePositionProperty.addSample(time, position);
         }
+        const baseOrientation = new VelocityOrientationProperty(firePositionProperty);
+
+        const offsetHPR = new HeadingPitchRoll(CesiumMath.toRadians(180), 0, 0);
+        const orientation = new CallbackProperty((time, result) => {
+            const baseQuat = baseOrientation.getValue(time, result);
+            const offsetQuat = Transforms.headingPitchRollQuaternion(Cartesian3.ZERO, offsetHPR);
+            return Quaternion.multiply(baseQuat, offsetQuat, result);
+        }, false);
 
         const fireTruckEntity = {
             availability: new TimeIntervalCollection([new TimeInterval({ start, stop: fireTruckStop })]),
             position: firePositionProperty,
-            orientation: new VelocityOrientationProperty(firePositionProperty),
+            orientation: orientation,
             path: new PathGraphics({ width: 3, material: Color.ORANGE }),
             model: {
                 uri: "/FireTruck.glb",
                 scale: 1.0,
                 minimumPixelSize: 240,
                 maximumPixelSize: 280,
-                maximumScale: 10
+                maximumScale: 30
             },
         };
         setFireTruckEntity(fireTruckEntity);
@@ -246,13 +256,35 @@ export default function MapViewer() {
                     <Entity
                         name="Emergency Location"
                         position={Cartesian3.fromDegrees(emergencyCoords[0], emergencyCoords[1], 220)}
-                        point={{ pixelSize: 16, color: Color.RED }}
-                    />
+                        point={{ pixelSize: 16, color: Color.RED }} >
+                        <LabelGraphics
+                            text="Ambulance Emergency Location"
+                            font="18px Helvetica"
+                            style={LabelStyle.FILL_AND_OUTLINE}
+                            outlineWidth={2}
+                            outlineColor={Color.BLACK}
+                            verticalOrigin={VerticalOrigin.BOTTOM}
+                            horizontalOrigin={HorizontalOrigin.CENTER}
+                            pixelOffset={new Cartesian2(0, -20)} // Offset to place label above the point
+                        />
+                    </Entity>
                     <Entity
                         name="Fire Emergency Location"
                         position={Cartesian3.fromDegrees(fireEmergencyCoords[0], fireEmergencyCoords[1], 220)}
                         point={{ pixelSize: 16, color: Color.ORANGE }}
-                    />
+
+                    >
+                        <LabelGraphics
+                            text="Fire Emergency Location"
+                            font="18px Helvetica"
+                            style={LabelStyle.FILL_AND_OUTLINE}
+                            outlineWidth={2}
+                            outlineColor={Color.BLACK}
+                            verticalOrigin={VerticalOrigin.BOTTOM}
+                            horizontalOrigin={HorizontalOrigin.CENTER}
+                            pixelOffset={new Cartesian2(0, -20)} // Offset to place label above the point
+                        />
+                    </Entity>
                     <div className="absolute top-4 left-4 bg-white p-4 rounded shadow-md z-10 space-y-2">
                         <div>
                             <h2 className="font-bold">🚑 Ambulance</h2>
