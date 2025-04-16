@@ -77,6 +77,11 @@ export default function MapViewer() {
         const stop = JulianDate.addSeconds(start, totalSeconds, new JulianDate());
         const fireTruckTotalSeconds = fireTimeStepInSeconds * (fireTruckPath.length - 1);
         const fireTruckStop = JulianDate.addSeconds(start, fireTruckTotalSeconds, new JulianDate());
+        const lastAmbulanceCoord = ambulancePath[ambulancePath.length - 1].coordinates;
+        const lastAmbulancePos = Cartesian3.fromDegrees(lastAmbulanceCoord[0], lastAmbulanceCoord[1], 220);
+
+        const lastFireCoord = fireTruckPath[fireTruckPath.length - 1].coordinates;
+        const lastFirePos = Cartesian3.fromDegrees(lastFireCoord[0], lastFireCoord[1], 220);
 
         const totalDistance = getTotalDistance(ambulancePath);
 
@@ -88,6 +93,8 @@ export default function MapViewer() {
             positionProperty.addSample(time, position);
         }
 
+        positionProperty.addSample(JulianDate.addSeconds(stop, 10000, new JulianDate()), lastAmbulancePos);
+
 
         const firePositionProperty = new SampledPositionProperty();
         for (let i = 0; i < fireTruckPath.length; i++) {
@@ -96,17 +103,22 @@ export default function MapViewer() {
             const time = JulianDate.addSeconds(start, i * fireTimeStepInSeconds, new JulianDate());
             firePositionProperty.addSample(time, position);
         }
+        firePositionProperty.addSample(JulianDate.addSeconds(fireTruckStop, 10000, new JulianDate()), lastFirePos);
+
         const baseOrientation = new VelocityOrientationProperty(firePositionProperty);
 
         const offsetHPR = new HeadingPitchRoll(CesiumMath.toRadians(180), 0, 0);
         const orientation = new CallbackProperty((time, result) => {
             const baseQuat = baseOrientation.getValue(time, result);
+            if (!baseQuat) {
+                return result; // or return undefined;
+            }
             const offsetQuat = Transforms.headingPitchRollQuaternion(Cartesian3.ZERO, offsetHPR);
             return Quaternion.multiply(baseQuat, offsetQuat, result);
         }, false);
 
         const fireTruckEntity = {
-            availability: new TimeIntervalCollection([new TimeInterval({ start, stop: fireTruckStop })]),
+            // availability: new TimeIntervalCollection([new TimeInterval({ start, stop: fireTruckStop })]),
             position: firePositionProperty,
             orientation: orientation,
             path: new PathGraphics({ width: 3, material: Color.ORANGE }),
@@ -122,7 +134,7 @@ export default function MapViewer() {
 
         const clock = new Clock();
         clock.startTime = start.clone();
-        clock.stopTime = stop.clone();
+        clock.stopTime = JulianDate.addSeconds(stop, 10, new JulianDate());
         clock.currentTime = start.clone();
         clock.clockRange = ClockRange.CLAMPED;
         clock.clockStep = ClockStep.SYSTEM_CLOCK_MULTIPLIER;
@@ -132,7 +144,7 @@ export default function MapViewer() {
         setClockProps(clock);
 
         const ambulanceEntity = {
-            availability: new TimeIntervalCollection([new TimeInterval({ start, stop })]),
+            // availability: new TimeIntervalCollection([new TimeInterval({ start, stop })]),
             position: positionProperty,
             orientation: new VelocityOrientationProperty(positionProperty),
             path: new PathGraphics({ width: 3, material: Color.RED }),
@@ -160,6 +172,7 @@ export default function MapViewer() {
             for (let i = 1; i < ambulancePath.length; i++) {
                 const time = JulianDate.addSeconds(start, i * timeStepInSeconds, new JulianDate());
                 const futurePos = positionProperty.getValue(time);
+
                 if (futurePos && JulianDate.compare(currentTime, time) < 0) {
                     distanceLeft += Cartesian3.distance(currentPosition, futurePos);
                     for (let j = i + 1; j < ambulancePath.length; j++) {

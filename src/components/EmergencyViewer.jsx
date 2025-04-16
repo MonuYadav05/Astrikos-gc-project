@@ -26,6 +26,7 @@ function EmergencyViewer() {
     const [emergencies, setEmergencies] = useState([])
     const [resources, setResources] = useState([])
     const [responseMetrics, setResponseMetrics] = useState([])
+    const [noOFemergencies, setNoOFemergencies] = useState(2);
 
     useEffect(() => {
         // Simulate real-time emergency data
@@ -65,7 +66,9 @@ function EmergencyViewer() {
 
 
                     {selectedView === '3d' ? (
-                        <MapViewer />
+                        <MapViewer
+                            setNoOFemergencies={setNoOFemergencies}
+                            noOFemergencies={noOFemergencies} />
                     ) : (
                         <MapContainer
                             center={[29.864097266133999, 77.896710156385822]}
@@ -132,7 +135,7 @@ function EmergencyViewer() {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-red-100 p-4 rounded-lg">
                             <h3 className="text-lg font-semibold text-red-800">Active Emergencies</h3>
-                            <p className="text-2xl font-bold text-red-600">{emergencies.length}</p>
+                            <p className="text-2xl font-bold text-red-600">{noOFemergencies}</p>
                         </div>
                         <div className="bg-blue-100 p-4 rounded-lg">
                             <h3 className="text-lg font-semibold text-blue-800">Available Resources</h3>
