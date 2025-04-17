@@ -1,12 +1,68 @@
-# React + Vite
+# 🚒 Emergency Response Simulation (3D Map Viewer)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A 3D emergency response visualization using CesiumJS that displays firetrucks and ambulances navigating through a mapped environment with realistic paths and animations.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 📸 Preview
 
-## Expanding the ESLint configuration
+![Demo Screenshot](./assets/demo.png)  
+*Firetruck and ambulance simulation using CesiumJS*
 
-If you are developing a production application, we recommend using TypeScript and enable type-aware lint rules. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+
+## 📦 Features
+
+- 3D vehicle models (FireTruck, Ambulance) with animation and orientation
+- Real-time path animation using `SampledPositionProperty`
+- Label graphics with styled backgrounds
+- Model rotation and camera tracking
+- Customizable paths and simulation timing
+
+---
+
+## 🛠️ Installation
+
+Clone the repository and install the dependencies:
+##🔧 Setup Instructions
+Install Node.js (>= 16.x): https://nodejs.org
+
+```bash
+git clone https://github.com/MonuYadav05/Astrikos-gc-project
+cd Astrikos-gc-project
+npm install
+npm run dev
+Then open your browser at: http://localhost:5173
+```
+## 📁 Project Structure
+
+/ ├── public/ │ ├── FireTruck.glb # 3D model used in Cesium │ └── Ambulance.glb ├── src/ │ ├── App.jsx # Main React component │ ├── components/ │ │ └── MapViewer.jsx # CesiumJS viewer setup │ └── data/ │ └── paths.js # Coordinates for firetruck and ambulance ├── README.md ├── vite.config.js └── package.json
+
+
+## 🧱 Architecture
+
+This project uses **React + Vite** for the frontend and **CesiumJS** for 3D rendering.
+
+### CesiumJS handles:
+
+- 3D globe rendering
+- Entity animation with `SampledPositionProperty`
+- Custom models and labels
+
+### React handles:
+
+- Component structure
+- State management
+
+### Optional Enhancements:
+
+- Camera tracking
+- Real-time data feeds via WebSocket or REST API
+
+---
+
+## 🔗 Dependencies
+
+- [`cesium`](https://www.npmjs.com/package/cesium)
+- [`resium`](https://github.com/reearth/resium) – React wrapper for Cesium
+- `react`, `vite`, `three` (bundled with Cesium)
