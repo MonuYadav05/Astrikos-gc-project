@@ -6,7 +6,10 @@ A 3D emergency response visualization using CesiumJS that displays firetrucks an
 
 ## 📸 Preview
 
-![image](https://github.com/user-attachments/assets/85566c89-22fd-45fe-9f9b-c9506b37ce64)
+![image](https://github.com/user-attachments/assets/05d4c1e6-aa31-4613-a7e1-d50b825f56c3)
+![image](https://github.com/user-attachments/assets/3526f397-700e-42a0-ae52-ede9b0c398e0)
+![image](https://github.com/user-attachments/assets/21419bcf-ecae-49af-898d-d12ae6e29add)
+
 
 *Firetruck and ambulance simulation using CesiumJS*
 
